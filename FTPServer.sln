@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.8.34330.188
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FTPServer", "FTPServer\FTPServer.csproj", "{BD2AAB50-892B-4071-B795-0AA568D22171}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{BD2AAB50-892B-4071-B795-0AA568D22171}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BD2AAB50-892B-4071-B795-0AA568D22171}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BD2AAB50-892B-4071-B795-0AA568D22171}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BD2AAB50-892B-4071-B795-0AA568D22171}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {8A55CD9D-9DB0-4ED3-8CAF-04FDF3B2F4AC}
+	EndGlobalSection
+EndGlobal
