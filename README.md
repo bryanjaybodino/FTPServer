@@ -1,6 +1,29 @@
 
 Complete Standard FTP Server using C#
 
+
+            int port = 2022;
+            string directory = "C://";
+
+            foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (ni.OperationalStatus == OperationalStatus.Up)
+                {
+                    IPInterfaceProperties properties = ni.GetIPProperties();
+                    foreach (UnicastIPAddressInformation ip in properties.UnicastAddresses)
+                    {
+                        Console.WriteLine("ftp://"+ip.Address.ToString()+":"+port);
+                    }
+                }
+            }
+
+       
+            Commands commands = new Commands(directory, port);
+            await commands.StartAsync();
+
+
+
+            
 Command List 
 
 PWD
