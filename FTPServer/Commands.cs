@@ -6,6 +6,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using System;
 using System.Linq;
+using System.Collections.Generic;
 
 namespace FTPServer
 {
@@ -17,27 +18,44 @@ namespace FTPServer
         private bool _isRunning;
         private string _currentDirectory;
         private string _rootFolder;
-        //private X509Certificate2 _serverCertificate;
         private TcpListener _dataListener;
         private TcpClient _dataClient;
         private string _renameFrom;
         private System.Text.Encoding encoding = System.Text.Encoding.UTF8;
-        public Commands(string rootFolder, int port = 2021)
+        private string currentUser { get; set; }
+        public Dictionary<string, string> UserCredentials = new Dictionary<string, string>();
+        public bool isRunning { get; private set; }
+        public Commands()
         {
-            _currentDirectory = Path.GetFullPath(rootFolder);
+            _rootFolder = string.Empty;
+            _listener = new TcpListener(IPAddress.Any, 21); // Default port 0 for demonstration                                             
+        }
+        public Commands(string rootFolder, int port = 21)
+        {
             _rootFolder = Path.GetFullPath(rootFolder);
             _listener = new TcpListener(IPAddress.Any, port);
-            //_serverCertificate = LoadCertificate();
         }
 
-        //private X509Certificate2 LoadCertificate()
-        //{
-        //    ServicePointManager.ServerCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) => true;
-        //    System.Net.ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12 | SecurityProtocolType.Ssl3;
-        //    ReadAsset readAsset = new ReadAsset();
-        //    var cert = readAsset.GetFileFromAssets("", "cert.pfx");
-        //    return new X509Certificate2(cert, "bryanjaybodino");
-        //}
+
+        public void Setup(string rootFolder, int port)
+        {
+            _rootFolder = Path.GetFullPath(rootFolder);
+            _listener = new TcpListener(IPAddress.Any, port);
+        }
+
+        private X509Certificate2 _serverCertificate;
+        public void LoadCertificate(string path, string password)
+        {
+            ServicePointManager.ServerCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) => true;
+            System.Net.ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12 | SecurityProtocolType.Ssl3;
+            _serverCertificate = new X509Certificate2(path, password);
+        }
+        public void LoadCertificate(byte[] rawData, string password)
+        {
+            ServicePointManager.ServerCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) => true;
+            System.Net.ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12 | SecurityProtocolType.Ssl3;
+            _serverCertificate = new X509Certificate2(rawData, password);
+        }
 
         public async Task StartAsync()
         {
@@ -60,6 +78,15 @@ namespace FTPServer
             }
         }
 
+        public async Task StopAsync()
+        {
+            try
+            {
+                isRunning = false;
+                _listener.Stop();
+            }
+            catch { }
+        }
         private async Task HandleClientAsync(TcpClient client)
         {
             _currentDirectory = Path.GetFullPath(_rootFolder);
@@ -84,9 +111,13 @@ namespace FTPServer
                     switch (command)
                     {
                         case "USER":
+                            Console.ForegroundColor = ConsoleColor.White;
+                            await HandleUserCommandAsync(client, networkStream, writer, argument);
+                            Console.ResetColor();
+                            break;
                         case "PASS":
-                            Console.ForegroundColor = ConsoleColor.Red;
-                            await ReplyAsync(networkStream, writer, 230, "User logged in, proceed.");
+                            Console.ForegroundColor = ConsoleColor.White;
+                            await HandlePassCommandAsync(client, networkStream, writer, argument);
                             Console.ResetColor();
                             break;
                         case "PWD":
@@ -149,22 +180,31 @@ namespace FTPServer
                             await ReplyAsync(networkStream, writer, 221, "Goodbye");
                             Console.ResetColor();
                             return;
-                        //case "AUTH":
-                        //    if (argument == "TLS")
-                        //    {
-                        //        ServicePointManager.ServerCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) => true;
-                        //        System.Net.ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12 | SecurityProtocolType.Ssl3;
-                        //        await ReplyAsync(networkStream, writer, 234, "Enabling TLS Connection");
-                        //        var sslStream = new SslStream(networkStream, false);
-                        //        await sslStream.AuthenticateAsServerAsync(_serverCertificate);
-                        //        reader = new StreamReader(sslStream, encoding);
-                        //        writer = new StreamWriter(sslStream) { AutoFlush = true };
-                        //    }
-                        //    else
-                        //    {
-                        //        await ReplyAsync(networkStream, writer, 502, "Command not implemented");
-                        //    }
-                        //    break;
+                        case "AUTH": //CANT SEPERATE BECAUSE WE ARE UPDATING THE reader and writer
+                            Console.ForegroundColor = ConsoleColor.White;
+                            if (_serverCertificate != null && _serverCertificate.HasPrivateKey)
+                            {
+                                bool isValid = _serverCertificate.Verify();
+                                if (argument == "TLS" && isValid)
+                                {
+                                    await ReplyAsync(networkStream, writer, 234, "Enabling TLS Connection");
+                                    // Ensure that no data is sent/received in plaintext after AUTH TLS
+                                    var sslStream = new SslStream(networkStream, false, (sender, certificate, chain, sslPolicyErrors) => true);
+                                    await sslStream.AuthenticateAsServerAsync(_serverCertificate);
+                                    reader = new StreamReader(sslStream);
+                                    writer = new StreamWriter(sslStream) { AutoFlush = true };
+                                }
+                                else
+                                {
+                                    await ReplyAsync(networkStream, writer, 502, "Certificate is invalid");
+                                }
+                            }
+                            else
+                            {
+                                await ReplyAsync(networkStream, writer, 502, "Command not implemented");
+                            }
+                            Console.ResetColor();
+                            break;
                         case "NOOP":
                             Console.ForegroundColor = ConsoleColor.Magenta;
                             await ReplyAsync(networkStream, writer, 200, "NOOP command successful.");
@@ -181,6 +221,11 @@ namespace FTPServer
                             break;
                         case "PORT":
                             await HandlePortCommandAsync(networkStream, writer, argument);
+                            break;
+                        case "SYST":
+                            Console.ForegroundColor = ConsoleColor.Cyan;
+                            await ReplyAsync(networkStream, writer, 215, "UNIX Type: L8");
+                            Console.ResetColor();
                             break;
                         default:
                             await ReplyAsync(networkStream, writer, 502, "Command not implemented");
@@ -651,7 +696,61 @@ namespace FTPServer
                 await dataWriter.FlushAsync();
             }
         }
+        private async Task HandleUserCommandAsync(TcpClient client, NetworkStream stream, StreamWriter writer, string username)
+        {
+            if (UserCredentials.Count > 0)
+            {
+                if (string.IsNullOrEmpty(username))
+                {
+                    await ReplyAsync(stream, writer, 501, "Syntax error in parameters or arguments.");
+                    return;
+                }
 
+                if (UserCredentials.ContainsKey(username))
+                {
+                    currentUser = username;
+                    await ReplyAsync(stream, writer, 331, "User name okay, need password.");
+                }
+                else
+                {
+                    await ReplyAsync(stream, writer, 430, "Invalid username.");
+                }
+            }
+            else
+            {
+                await ReplyAsync(stream, writer, 331, "Login as Anonymous");
+            }
+        }
+        private async Task HandlePassCommandAsync(TcpClient client, NetworkStream stream, StreamWriter writer, string password)
+        {
+            if (UserCredentials.Count > 0)
+            {
+                if (currentUser == null)
+                {
+                    await ReplyAsync(stream, writer, 503, "Login with USER first.");
+                    return;
+                }
+
+                if (string.IsNullOrEmpty(password))
+                {
+                    await ReplyAsync(stream, writer, 501, "Syntax error in parameters or arguments.");
+                    return;
+                }
+
+                if (UserCredentials.TryGetValue(currentUser, out var storedPassword) && storedPassword == password)
+                {
+                    await ReplyAsync(stream, writer, 230, "User logged in, proceed.");
+                }
+                else
+                {
+                    await ReplyAsync(stream, writer, 430, "Invalid password.");
+                }
+            }
+            else
+            {
+                await ReplyAsync(stream, writer, 230, "Login in proceed");
+            }
+        }
         private async Task ReplyAsync(NetworkStream stream, StreamWriter writer, int code, string message)
         {
             var response = $"{code} {message}\r\n";
@@ -659,7 +758,7 @@ namespace FTPServer
             await stream.WriteAsync(responseBytes, 0, responseBytes.Length);
             await stream.FlushAsync();
             await writer.FlushAsync();
-            Console.WriteLine("Server Reply : "+message+"\n");
+            Console.WriteLine("Server Reply : " + message + "\n");
         }
     }
 }
