@@ -1,12 +1,13 @@
-Complete Standard FTP Server using C#
+Complete Standard FTP Server using C# 
 
 Command List
 
 PWD CWD PASV LIST STOR RETR DELE RMD MKD RNFR RNTO QUIT NOOP TYPE SITE OPTS PORT
 
+Download the NuGet Package : https://www.nuget.org/packages/BNet.FTPServer
+
 internal class Program
 {
-
     static Commands commands = new Commands("C://", 2022);
     static async Task Main(string[] args)
     {
